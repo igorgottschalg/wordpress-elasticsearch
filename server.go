@@ -5,55 +5,71 @@ import (
 	"net/http"
 	"time"
 	"encoding/json"
+	"strconv"
 
 	"github.com/go-redis/redis/v7"
 	"github.com/gorilla/mux"
 )
 
-type POST struct {
-	ID       int    `json:"id"`
-	Content  string `json:"content"`
-	URL      string `json:"url"`
-	PostType string `json:"post_type"`
+type Fields struct {
+    ID         int    `json:"id"`
+    Content    string `json:"content"`
+    Image      string `json:"image"`
+    Url        string `json:"url"`
+    PostType   string `json:"post_type"`
+    Keywords []string `json:"keywords"`
+}
+
+type Post struct {
+	ID  int       `json:"id"`
+    Fields Fields `json:"fields"`
 }
 
 func savePostHandleFunc (w http.ResponseWriter, req *http.Request) {
     w.Header().Add("Content-Type", "application/json")
-    var post POST
+    var fields Fields
 
-    err := json.NewDecoder(req.Body).Decode(&post)
+    err := json.NewDecoder(req.Body).Decode(&fields)
     if err != nil {
         log.Println(err)
         return
     }
 
-    post_to_save, err := json.Marshal(&post)
+    post := Post{
+        ID: fields.ID,
+        Fields: fields,
+    }
+
+    post_to_save, err := json.Marshal(post)
     if err != nil {
+        log.Println(err)
         return
     }
 
     client := redisClient()
-    err = client.Set(string(post.ID), string(post_to_save), 0).Err()
-    if err != nil {
-        log.Println(err)
-    }
+    client.Set(strconv.Itoa(post.ID), string(post_to_save), 0)
+    log.Println(string(post_to_save))
 }
 
 func redisClient() *redis.Client{
     client := redis.NewClient(&redis.Options{
-   		Addr:   "127.0.0.1:6379",
+   		Addr:   "redis:6379",
    		Password: "",
    		DB: 0,
    	})
+   	pong, err := client.Ping().Result()
+    log.Println(pong, err)
    	return client
 }
 
 func main() {
     router := mux.NewRouter()
+
     router.HandleFunc("/", savePostHandleFunc).Methods("POST")
+
     srv := &http.Server{
         Handler:      router,
-        Addr:         "127.0.0.1:3030",
+        Addr:         "0.0.0.0:3030",
         WriteTimeout: 15 * time.Second,
         ReadTimeout:  15 * time.Second,
     }

@@ -11,5 +11,5 @@ FROM alpine
 WORKDIR /app
 COPY --from=build_base /app /app
 
-EXPOSE 8080
+EXPOSE 3000
 CMD ["/app/main"]

@@ -3,16 +3,61 @@ package main
 import (
 	"log"
 	"net/http"
-	"time"
 	"encoding/json"
+	"time"
+	"bytes"
 	"strconv"
 
-	"github.com/go-redis/redis/v7"
 	"github.com/gorilla/mux"
 )
 
-type Fields struct {
+var elasticSearchUrl = "http://elasticsearch:9200"
+var postIndex = `{
+  "index": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1
+  },
+  "mappings": {
+    "properties": {
+      "_id": {
+        "type": "interger"
+      },
+      "fields": {
+        "properties": {
+          "id": {
+            "type": "interger",
+            "index": true
+          },
+          "content": {
+            "type": "text",
+            "index": true
+          },
+          "name": {
+            "type": "text",
+            "index": true
+          },
+          "image": {
+            "type": "text"
+          },
+          "url": {
+            "type": "text"
+          },
+          "posttype": {
+            "type": "text"
+          },
+          "keywords": {
+            "type": "nested",
+            "index": true
+          }
+        }
+      }
+    }
+  }
+}`
+
+type Post struct {
     ID         int    `json:"id"`
+    Name       string `json:"name"`
     Content    string `json:"content"`
     Image      string `json:"image"`
     Url        string `json:"url"`
@@ -20,51 +65,52 @@ type Fields struct {
     Keywords []string `json:"keywords"`
 }
 
-type Post struct {
-	ID  int       `json:"id"`
-    Fields Fields `json:"fields"`
-}
+func savePostHandleFunc (response http.ResponseWriter, req *http.Request) {
+    response.Header().Add("Content-Type", "application/json")
+    var post Post
 
-func savePostHandleFunc (w http.ResponseWriter, req *http.Request) {
-    w.Header().Add("Content-Type", "application/json")
-    var fields Fields
-
-    err := json.NewDecoder(req.Body).Decode(&fields)
+    err := json.NewDecoder(req.Body).Decode(&post)
     if err != nil {
         log.Println(err)
+        response.Header().Set("Connection", "close")
         return
-    }
-
-    post := Post{
-        ID: fields.ID,
-        Fields: fields,
     }
 
     post_to_save, err := json.Marshal(post)
     if err != nil {
         log.Println(err)
+        response.Header().Set("Connection", "close")
         return
     }
 
-    client := redisClient()
-    client.Set(strconv.Itoa(post.ID), string(post_to_save), 0)
+    request,_ := http.NewRequest("PUT", elasticSearchUrl+"/posts/_doc/"+strconv.Itoa(post.ID), bytes.NewBuffer(post_to_save))
+    request.Header.Set("Content-Type", "application/json")
+    client := &http.Client{}
+    _, err = client.Do(request)
+    if err != nil {
+        log.Println(err)
+        response.Header().Set("Connection", "close")
+        return
+    }
+
     log.Println(string(post_to_save))
 }
 
-func redisClient() *redis.Client{
-    client := redis.NewClient(&redis.Options{
-   		Addr:   "redis:6379",
-   		Password: "",
-   		DB: 0,
-   	})
-   	pong, err := client.Ping().Result()
-    log.Println(pong, err)
-   	return client
+func registerElasticIndex(){
+    req,err :=  http.NewRequest("PUT", elasticSearchUrl+"/posts", bytes.NewBuffer([]byte(postIndex)))
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    _, err = client.Do(req)
+    if err != nil {
+        log.Println(err)
+    }
 }
 
 func main() {
-    router := mux.NewRouter()
+    registerElasticIndex()
 
+    router := mux.NewRouter()
     router.HandleFunc("/", savePostHandleFunc).Methods("POST")
 
     srv := &http.Server{
@@ -73,5 +119,6 @@ func main() {
         WriteTimeout: 15 * time.Second,
         ReadTimeout:  15 * time.Second,
     }
+
     log.Fatal(srv.ListenAndServe())
 }

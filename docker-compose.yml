@@ -2,6 +2,7 @@ version: "3.7"
 
 services:
   webserver:
+    container_name: wp-search
     build: ./
     ports:
       - 3030:3030
@@ -9,14 +10,26 @@ services:
       - type: bind
         source: .
         target: /app
-    working_dir: /app
+    networks:
+      - fronend
 
-  redis:
-    image: redis:alpine
-
-  redis-commander:
-    image: rediscommander/redis-commander:latest
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.5.1
     environment:
-      - REDIS_HOSTS=local:redis:6379
+      - discovery.type=single-node
+      - cluster.name=docker-
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "8081:8081"
+      - 9200:9200
+    volumes:
+      - ./config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      - ./elasticsearch-data:/usr/share/elasticsearch/data/
+    networks:
+      - fronend
+
+networks:
+  fronend:
+  backend:
+    internal: true

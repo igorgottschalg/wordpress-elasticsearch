@@ -7,12 +7,14 @@ import (
 	"time"
 	"bytes"
 	"strconv"
+	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/fatih/color"
 )
 
-var elasticSearchUrl = "http://elasticsearch:9200"
-var postIndex = `{
+var ELASTIC_SEARCH_URL = get_elastic_searchUrl()
+const POST_INDEX = `{
   "index": {
     "number_of_shards": 1,
     "number_of_replicas": 1
@@ -65,60 +67,73 @@ type Post struct {
     Keywords []string `json:"keywords"`
 }
 
-func savePostHandleFunc (response http.ResponseWriter, req *http.Request) {
-    response.Header().Add("Content-Type", "application/json")
+func get_elastic_searchUrl() string {
+    var url string
+    if (os.Getenv("ELASTIC_SEARCH_URL") != ""){
+        url = os.Getenv("ELASTIC_SEARCH_URL")
+    }else{
+        url = "http://localhost:9200"
+    }
+    return url
+}
+
+func errorHandler(err error) bool{
+    if err != nil {
+        color.Red(err.Error())
+    }
+    return err != nil
+}
+
+func save_post_handle(response http.ResponseWriter, req *http.Request) {
     var post Post
 
     err := json.NewDecoder(req.Body).Decode(&post)
-    if err != nil {
-        log.Println(err)
-        response.Header().Set("Connection", "close")
-        return
-    }
+    errorHandler(err)
 
     post_to_save, err := json.Marshal(post)
-    if err != nil {
-        log.Println(err)
-        response.Header().Set("Connection", "close")
-        return
-    }
+    errorHandler(err)
 
-    request,_ := http.NewRequest("PUT", elasticSearchUrl+"/posts/_doc/"+strconv.Itoa(post.ID), bytes.NewBuffer(post_to_save))
+    request,_ := http.NewRequest("PUT", ELASTIC_SEARCH_URL + "/posts/_doc/" + strconv.Itoa(post.ID), bytes.NewBuffer(post_to_save))
     request.Header.Set("Content-Type", "application/json")
     client := &http.Client{}
-    _, err = client.Do(request)
-    if err != nil {
-        log.Println(err)
-        response.Header().Set("Connection", "close")
-        return
-    }
 
+    _, err = client.Do(request)
+    errorHandler(err)
+
+    color.Green("Object saved:")
     log.Println(string(post_to_save))
 }
 
-func registerElasticIndex(){
-    req,err :=  http.NewRequest("PUT", elasticSearchUrl+"/posts", bytes.NewBuffer([]byte(postIndex)))
+func register_elastic_index(){
+    color.White("Creating Elastic Search index")
+    req,err :=  http.NewRequest("PUT", ELASTIC_SEARCH_URL + "/posts", bytes.NewBuffer([]byte(POST_INDEX)))
     req.Header.Set("Content-Type", "application/json")
 
     client := &http.Client{}
     _, err = client.Do(req)
-    if err != nil {
-        log.Println(err)
+    errorHandler(err)
+
+    if (err==nil) {
+        color.Green("Index created.")
     }
+
 }
 
 func main() {
-    registerElasticIndex()
+    color.Blue("Inicializing webserver...")
+    color.White("Elastic search url: " + ELASTIC_SEARCH_URL)
 
     router := mux.NewRouter()
-    router.HandleFunc("/", savePostHandleFunc).Methods("POST")
+    router.HandleFunc("/", save_post_handle).Methods("POST")
 
     srv := &http.Server{
         Handler:      router,
-        Addr:         "0.0.0.0:3030",
+        Addr:         "0.0.0.0:3000",
         WriteTimeout: 15 * time.Second,
         ReadTimeout:  15 * time.Second,
     }
+
+    register_elastic_index()
 
     log.Fatal(srv.ListenAndServe())
 }

@@ -1,0 +1,5 @@
+./elasticsearch-data/
+./config/
+./git/
+./docker-compose.yml
+./.gitignore

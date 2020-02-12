@@ -2,19 +2,21 @@ version: "3.7"
 
 services:
   webserver:
-    container_name: wp-search
-    build: ./
+    container_name: search-index
+    image: zephinzer/golang-dev:latest
+    environment:
+      - ELASTIC_SEARCH_URL=http://elasticsearch:9200
+    entrypoint:
+      - start
     ports:
-      - 3030:3030
+      - 3030:3000
     volumes:
-      - type: bind
-        source: .
-        target: /app
+      - ./:/go/src/app
     networks:
       - fronend
 
   elasticsearch:
-    container_name: elasticsearch
+    container_name: search-database
     image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.5.1
     environment:
       - discovery.type=single-node

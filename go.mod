@@ -1,4 +1,4 @@
-module github.com/igorgottschalg/wordpress-elasticsearch
+module github.com/igorgottschalg/wordpress-elasticsearch-index
 
 go 1.13
 

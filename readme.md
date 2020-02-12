@@ -7,7 +7,7 @@ This microservice has a proposal to receive a wordpress data and index on Elasti
 
 ### How to use
 In wordpress save post hook, implement or use a plugin to send data to this microservice, with the bellow structure:
-```json
+```
 {
     "id": Interger,
     "name": String,

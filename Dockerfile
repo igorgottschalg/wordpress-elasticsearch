@@ -12,4 +12,4 @@ WORKDIR /app
 COPY --from=build_base /app /app
 
 EXPOSE 3000
-CMD ["/app/main"]
+CMD ["/app/app"]

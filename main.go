@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"os"
 
+    "ithub.com/igorgottschalg/wordpress-elasticsearch-index/try"
 	"github.com/gorilla/mux"
 	"github.com/fatih/color"
 )
+
 
 var ELASTIC_SEARCH_URL = get_elastic_searchUrl()
 const POST_INDEX = `{
@@ -104,20 +106,45 @@ func save_post_handle(response http.ResponseWriter, req *http.Request) {
     log.Println(string(post_to_save))
 }
 
+func search_object(response http.ResponseWriter, req *http.Request){
+    var searchText = `
+    {
+        query: {
+            multi_match: {
+                query: "+ req.URL.Query()["query"] +",
+                fields: ["name", "content", "keywords"],
+            },
+        },
+    }
+    `
+
+    request,_ := http.NewRequest("POST", ELASTIC_SEARCH_URL + "/_search/", bytes.NewBuffer([]byte(searchText)))
+    request.Header.Set("Content-Type", "application/json")
+    client := &http.Client{}
+    result, err := client.Do(request)
+}
+
 func register_elastic_index(){
     color.White("Creating Elastic Search index")
+
     req,err :=  http.NewRequest("PUT", ELASTIC_SEARCH_URL + "/posts", bytes.NewBuffer([]byte(POST_INDEX)))
     req.Header.Set("Content-Type", "application/json")
 
     client := &http.Client{}
-    _, err = client.Do(req)
-    errorHandler(err)
 
-    if (err==nil) {
-        color.Green("Index created.")
-    }
+    var value string
+    try.Do(func(attempt int) (bool, error) {
+      var err error
+      value, err = client.Do(req)
 
+      if err != nil {
+        time.Sleep(30 * time.Second) // wait a minute
+      }
+
+      return attempt < 10, err
+    })
 }
+
 
 func main() {
     color.Blue("Inicializing webserver...")
@@ -125,6 +152,7 @@ func main() {
 
     router := mux.NewRouter()
     router.HandleFunc("/", save_post_handle).Methods("POST")
+    router.HandleFunc("/search", search_object).Methods("GET")
 
     srv := &http.Server{
         Handler:      router,
